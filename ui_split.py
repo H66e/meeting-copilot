@@ -20,6 +20,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import tkinter as tk
+from tkinter import font as tkfont
 from tkinter import ttk
 
 from config import get
@@ -31,25 +32,218 @@ from scenarios import normalize_scenario, scenario_label
 from ui_overlay import (delay_text, enable_dpi_awareness, iter_monitors,
                         list_output_devices_safe, pick_monitor, short_device, status_text)
 
-C_BG = "#0d1117"
-C_PANEL = "#141a23"
-C_CARD = "#19212d"
-C_ANSW_BG = "#182231"
-C_READ_BG = "#13251f"
-C_ASK_BG = "#111923"
-C_BORDER = "#293342"
-C_TEXT = "#edf2f8"
-C_MUTED = "#a9b4c3"
-C_DIM = "#748195"
-C_ACCENT = "#68a7ff"
-C_WARM = "#efbd72"
-C_READ = "#78d7ab"
-C_OK = "#55d68b"
-C_ERR = "#f08383"
-C_ERR_SOFT = "#392229"
-C_TS = "#718096"
-C_BTN = "#202a38"
-C_BTN_HOVER = "#2c394b"
+# Apple 式浅色工作台：浅灰背景、白色内容卡片、系统蓝主操作。
+C_BG = "#F5F5F7"
+C_PANEL = "#FFFFFF"
+C_CARD = "#FFFFFF"
+C_ANSW_BG = C_PANEL
+C_READ_BG = C_PANEL
+C_ASK_BG = "#F7F7F9"
+C_BORDER = "#E2E2E7"
+C_TEXT = "#1D1D1F"
+C_MUTED = "#6E6E73"
+C_DIM = "#8E8E93"
+C_ACCENT = "#007AFF"
+C_ACCENT_HOVER = "#3395FF"
+C_ACCENT_SOFT = "#E8F1FF"
+C_ACCENT_SOFT_HOVER = "#D6E7FF"
+C_WARM = "#B25000"
+C_WARM_SOFT = "#FFF1DE"
+C_WARM_HOVER = "#F5DFC0"
+C_READ = "#248A3D"
+C_OK = "#34C759"
+C_ERR = "#D70015"
+C_ERR_SOFT = "#FFE9E7"
+C_TS = "#8E8E93"
+C_BTN = "#E9E9EE"
+C_BTN_HOVER = "#DFDFE5"
+C_SELECT = "#B9D9FF"
+C_SHADOW = "#ECECF1"
+
+
+def _rounded_points(width: float, height: float, radius: float) -> list[float]:
+    """返回 Canvas 平滑多边形顶点；无需第三方圆角控件依赖。"""
+    w, h = max(2.0, width - 1), max(2.0, height - 1)
+    r = max(1.0, min(radius, w / 2, h / 2))
+    return [r, 0, w-r, 0, w, 0, w, r, w, h-r, w, h,
+            w-r, h, r, h, 0, h, 0, h-r, 0, r, 0, 0]
+
+
+class RoundedButton(tk.Canvas):
+    """保留 Button 常用接口的轻量圆角按钮。"""
+
+    def __init__(self, parent, *, text, command, font, bg, fg, hover,
+                 padx: int, pady: int, radius: int):
+        self._text = str(text)
+        self._command = command
+        self._font = font
+        self._mc_bg = bg
+        self._mc_fg = fg
+        self._mc_hover = hover
+        self._mc_active_fg = fg
+        self._mc_border = bg
+        self._focus_color = C_ACCENT
+        self._disabled_fg = C_DIM
+        self._padx = int(padx)
+        self._pady = int(pady)
+        self._radius = int(radius)
+        self._width_chars = 0
+        self._state = "normal"
+        self._hovered = False
+        super().__init__(parent, bg=parent.cget("bg"), bd=0, highlightthickness=0,
+                         takefocus=0, cursor="hand2")
+        self._shape = self.create_polygon([0, 0], smooth=True, splinesteps=24)
+        self._caption = self.create_text(0, 0, text=self._text, font=self._font)
+        self.bind("<ButtonRelease-1>", self._activate)
+        self.bind("<Return>", self._activate)
+        self.bind("<space>", self._activate)
+        self.bind("<FocusIn>", lambda _e: self._draw(self.winfo_width(), self.winfo_height()))
+        self.bind("<FocusOut>", lambda _e: self._draw(self.winfo_width(), self.winfo_height()))
+        self.bind("<Configure>", lambda e: self._draw(e.width, e.height), add="+")
+        self._redraw()
+
+    def _measure(self) -> tuple[int, int]:
+        font = tkfont.Font(master=self, font=self._font)
+        text_width = font.measure(self._text)
+        if self._width_chars:
+            text_width = max(text_width, font.measure("0" * self._width_chars))
+        return (text_width + self._padx * 2 + 4,
+                font.metrics("linespace") + self._pady * 2 + 4)
+
+    def _draw(self, width: int, height: int) -> None:
+        if width <= 2 or height <= 2:
+            return
+        hovered = self._hovered and self._state == "normal"
+        fill = self._mc_hover if hovered else self._mc_bg
+        fg = self._disabled_fg if self._state == "disabled" else (
+            self._mc_active_fg if hovered else self._mc_fg)
+        outline = self._focus_color if self.focus_get() is self else self._mc_border
+        self.coords(self._shape, _rounded_points(width, height, self._radius))
+        self.itemconfigure(self._shape, fill=fill, outline=outline, width=1)
+        self.coords(self._caption, width / 2, height / 2)
+        self.itemconfigure(self._caption, text=self._text, font=self._font, fill=fg)
+
+    def _redraw(self) -> None:
+        width, height = self._measure()
+        super().configure(width=width, height=height,
+                          cursor="hand2" if self._state == "normal" else "arrow")
+        self._draw(width, height)
+
+    def set_hover(self, active: bool) -> None:
+        self._hovered = bool(active)
+        self._draw(self.winfo_width(), self.winfo_height())
+
+    def _activate(self, event=None):
+        if self._state != "normal":
+            return "break"
+        if event is not None and hasattr(event, "x"):
+            if not (0 <= event.x <= self.winfo_width() and 0 <= event.y <= self.winfo_height()):
+                return "break"
+        if callable(self._command):
+            self._command()
+        return "break"
+
+    def invoke(self):
+        """兼容 tk.Button.invoke，便于测试与外部控制。"""
+        if self._state == "normal" and callable(self._command):
+            return self._command()
+        return None
+
+    def configure(self, cnf=None, **kwargs):
+        if isinstance(cnf, str) and not kwargs:
+            return self.cget(cnf)
+        options = dict(cnf or {})
+        options.update(kwargs)
+        mapping = {
+            "text": "_text", "command": "_command", "font": "_font",
+            "bg": "_mc_bg", "fg": "_mc_fg", "activebackground": "_mc_hover",
+            "activeforeground": "_mc_active_fg", "highlightbackground": "_mc_border",
+            "highlightcolor": "_focus_color", "disabledforeground": "_disabled_fg",
+        }
+        for key, value in list(options.items()):
+            if key in mapping:
+                setattr(self, mapping[key], value)
+                options.pop(key)
+        if "state" in options:
+            self._state = str(options.pop("state"))
+        if "width" in options:
+            self._width_chars = int(options.pop("width"))
+        if options:
+            super().configure(**options)
+        self._redraw()
+        return None
+
+    config = configure
+
+    def cget(self, key):
+        values = {
+            "text": self._text, "font": self._font, "bg": self._mc_bg,
+            "fg": self._mc_fg, "activebackground": self._mc_hover,
+            "activeforeground": self._mc_active_fg, "highlightbackground": self._mc_border,
+            "disabledforeground": self._disabled_fg, "state": self._state,
+            "width": self._width_chars,
+        }
+        return values[key] if key in values else super().cget(key)
+
+
+class RoundedPanel(tk.Frame):
+    """带圆角背景的 Frame；子控件仍使用原生 pack / grid。"""
+
+    def __init__(self, parent, *, bg=C_PANEL, radius=12, border=C_BORDER,
+                 highlightbackground=None, highlightthickness=1, shadow=False, **_kwargs):
+        self._panel_bg = bg
+        self._radius = radius
+        self._border = highlightbackground or border
+        self._border_width = int(highlightthickness)
+        super().__init__(parent, bg=parent.cget("bg"), bd=0, highlightthickness=0)
+        self._surface = tk.Canvas(self, bg=parent.cget("bg"), bd=0, highlightthickness=0)
+        self._shadow = (self._surface.create_polygon([0, 0], smooth=True, splinesteps=32)
+                        if shadow else None)
+        self._shape = self._surface.create_polygon([0, 0], smooth=True, splinesteps=32)
+        self._surface.place(x=0, y=0, relwidth=1, relheight=1)
+        # 背景最先创建，后续子控件自然位于其上层。
+        self._surface.bind("<Configure>", lambda e: self._draw_panel(e.width, e.height))
+
+    def _draw_panel(self, width: int, height: int) -> None:
+        if width <= 2 or height <= 2:
+            return
+        if self._shadow is not None:
+            points = _rounded_points(width, max(2, height - 2), self._radius)
+            points[1::2] = [y + 2 for y in points[1::2]]
+            self._surface.coords(self._shadow, points)
+            self._surface.itemconfigure(self._shadow, fill=C_SHADOW, outline=C_SHADOW)
+        self._surface.coords(self._shape, _rounded_points(width, height, self._radius))
+        self._surface.itemconfigure(
+            self._shape, fill=self._panel_bg,
+            outline=self._border if self._border_width else self._panel_bg,
+            width=max(1, self._border_width))
+
+    def configure(self, cnf=None, **kwargs):
+        if isinstance(cnf, str) and not kwargs:
+            return self.cget(cnf)
+        options = dict(cnf or {})
+        options.update(kwargs)
+        if "bg" in options:
+            self._panel_bg = options.pop("bg")
+        if "highlightbackground" in options:
+            self._border = options.pop("highlightbackground")
+        if "highlightthickness" in options:
+            self._border_width = int(options.pop("highlightthickness"))
+        if options:
+            super().configure(**options)
+        self._draw_panel(self._surface.winfo_width(), self._surface.winfo_height())
+        return None
+
+    config = configure
+
+    def cget(self, key):
+        if key == "bg":
+            return self._panel_bg
+        if key == "highlightbackground":
+            return self._border
+        if key == "highlightthickness":
+            return self._border_width
+        return super().cget(key)
 
 
 class OverlayUI:
@@ -74,7 +268,8 @@ class OverlayUI:
         self._scale = float(get(self.cfg, "ui.split_scale", 1.0) or 1.0)
         self._font_scale = float(get(self.cfg, "ui.font_scale", 100) or 100) / 100.0
         self._actions: dict[str, Callable[..., Any]] = {}
-        self._btn: dict[str, tk.Button] = {}
+        self._btn: dict[str, RoundedButton] = {}
+        self._compact_commands = False
         self._dispatch_ts: dict[str, float] = {}
         self._dispatch_burst: dict[str, list[float]] = {}
         self._click_through = False
@@ -98,6 +293,7 @@ class OverlayUI:
         self._history_status_lbl: Optional[tk.Label] = None
         self._hints: list[list] = []
         self._settings_win: Optional[tk.Toplevel] = None
+        self._settings_save: Optional[Callable[[], None]] = None
         self._poll_job = None
         self._save_job = None
         self._state_path = ROOT / "data" / "ui_state.json"
@@ -167,6 +363,24 @@ class OverlayUI:
             except Exception:
                 pass
         self._save_job = self.root.after(700, self._save_ui_state)
+        if "ask" in self._btn:
+            compact = self.root.winfo_width() < 940
+            if compact != self._compact_commands:
+                self._compact_commands = compact
+                self._refresh_command_labels()
+        self.root.after_idle(self._follow_after_resize)
+
+    def _follow_after_resize(self) -> None:
+        """最大化或拖动窗口后，跟随模式仍停在最新内容。"""
+        if self.root is None or self._closed:
+            return
+        try:
+            if hasattr(self, "transcript") and self._follow_var and self._follow_var.get():
+                self.transcript.see("end")
+            if self._qa_visible and hasattr(self, "qa_box"):
+                self._scroll_qa_to_latest()
+        except tk.TclError:
+            pass
 
     def _save_ui_state(self) -> None:
         self._save_job = None
@@ -275,141 +489,195 @@ class OverlayUI:
 
     def _build_ui(self) -> None:
         assert self.root is not None
+        self._configure_ttk()
         head = tk.Frame(self.root, bg=C_BG)
-        head.pack(fill="x", padx=self._px(16), pady=(self._px(12), 0))
-        title = tk.Frame(head, bg=C_BG)
+        head.pack(fill="x", padx=self._px(24), pady=(self._px(20), 0))
+
+        brand = tk.Frame(head, bg=C_BG)
+        brand.pack(side="left")
+        size = self._px(38)
+        mark = tk.Canvas(brand, width=size, height=size, bg=C_BG,
+                         bd=0, highlightthickness=0)
+        mark.pack(side="left", padx=(0, self._px(12)))
+        mark.create_oval(1, 1, size-1, size-1, fill=C_ACCENT_SOFT, outline="")
+        for x, top, bottom in ((0.29, 0.38, 0.62), (0.41, 0.28, 0.72),
+                               (0.53, 0.20, 0.80), (0.65, 0.29, 0.71), (0.77, 0.39, 0.61)):
+            mark.create_line(size*x, size*top, size*x, size*bottom,
+                             fill=C_ACCENT, width=max(2, self._px(2)), capstyle="round")
+        title = tk.Frame(brand, bg=C_BG)
         title.pack(side="left")
         app_name = str(get(self.cfg, "app.name", "Meeting Copilot") or "Meeting Copilot")
-        self.app_title_lbl = tk.Label(title, text=f"{app_name} · {scenario_label(self.cfg)}",
-                                      bg=C_BG, fg=C_TEXT, font=self._font(15, "bold"))
-        self.app_title_lbl.pack(side="left")
-        self.dot = tk.Label(title, text="●", bg=C_BG, fg=C_DIM, font=self._font(10))
-        self.dot.pack(side="left", padx=(self._px(16), self._px(4)))
-        self.state_lbl = tk.Label(title, text="待机", bg=C_BG, fg=C_MUTED, font=self._font(10))
-        self.state_lbl.pack(side="left")
-        self.timer_lbl = tk.Label(title, text="00:00", bg=C_BG, fg=C_MUTED,
-                                  font=self._font(10, mono=True))
-        self.timer_lbl.pack(side="left", padx=(self._px(10), 0))
-        self._btn["settings"] = self._button(head, "设置", self._open_settings, side="right")
-        self._btn["hide"] = self._button(head, "隐藏  F7", self.toggle_visible, side="right")
-        self._btn["quit"] = self._button(head, "退出", self._on_click_quit, side="right", danger=True)
+        self.app_title_lbl = tk.Label(title, text=app_name,
+                                      bg=C_BG, fg=C_TEXT, font=self._font(16, "bold"))
+        self.app_title_lbl.pack(anchor="w")
 
-        toolbar = tk.Frame(self.root, bg=C_BG)
-        toolbar.pack(fill="x", padx=self._px(14), pady=(self._px(10), self._px(8)))
-        self._btn["listen"] = self._button(toolbar, "▶ 开始聆听  F8", self._on_click_listen, accent=True)
-        for key, label in (("capture", "看屏  F9"), ("script", "照读稿  F5"),
-                           ("im_asked", "被点名  F6"), ("summary", "小结  F10"),
-                           ("export", "导出纪要")):
-            action = {"capture": "screenshot"}.get(key, key)
-            self._btn[key] = self._button(toolbar, label, lambda a=action: self._click_action(a))
-        self._btn["ask"] = self._button(toolbar, "自由提问  F2", self.toggle_ask_panel, accent=True)
-        self.delay_lbl = tk.Label(toolbar, text="延迟 -", bg=C_BG, fg=C_DIM, font=self._font(9))
-        self.delay_lbl.pack(side="right", padx=self._px(4))
+        utilities = tk.Frame(head, bg=C_BG)
+        utilities.pack(side="right", pady=self._px(2))
+        self._btn["settings"] = self._button(
+            utilities, "设置", self._open_settings, compact=True)
+        self._btn["hide"] = self._button(
+            utilities, "隐藏", self.toggle_visible, compact=True)
+        self._btn["quit"] = self._button(
+            utilities, "退出", self._on_click_quit, danger=True, compact=True)
+
+        status = RoundedPanel(head, bg=C_PANEL, radius=10)
+        status.pack(side="right", padx=(0, self._px(10)), pady=self._px(2))
+        self.dot = tk.Label(status, text="●", bg=C_PANEL, fg=C_DIM, font=self._font(7))
+        self.dot.pack(side="left", padx=(self._px(11), self._px(5)), pady=self._px(7))
+        self.state_lbl = tk.Label(status, text="待机", bg=C_PANEL, fg=C_MUTED, font=self._font(9))
+        self.state_lbl.pack(side="left", pady=self._px(7))
+        self.timer_lbl = tk.Label(status, text="00:00", bg=C_PANEL, fg=C_TEXT,
+                                  font=self._font(10, mono=True))
+        self.timer_lbl.pack(side="left", padx=(self._px(12), self._px(11)), pady=self._px(7))
+
+        toolbar = RoundedPanel(self.root, bg=C_PANEL, radius=14, border=C_BORDER)
+        toolbar.pack(fill="x", padx=self._px(20), pady=(self._px(18), self._px(14)))
+        tools = tk.Frame(toolbar, bg=C_PANEL)
+        tools.pack(fill="x", padx=self._px(6), pady=self._px(5))
+        commands = (
+            ("listen", "▶ 开始聆听  F8", self._on_click_listen),
+            ("capture", "看屏", lambda: self._click_action("screenshot")),
+            ("script", "照读稿", lambda: self._click_action("script")),
+            ("im_asked", "被点名", lambda: self._click_action("im_asked")),
+            ("summary", "小结", lambda: self._click_action("summary")),
+            ("export", "导出纪要", lambda: self._click_action("export")),
+            ("ask", "自由提问  F2", self.toggle_ask_panel),
+        )
+        for key, label, command in commands:
+            self._btn[key] = self._button(
+                tools, label, command, accent=key == "listen",
+                side="right" if key == "ask" else "left")
+            self._btn[key].pack_configure(padx=(0, self._px(3)))
+        tk.Frame(tools, bg=C_BORDER, width=1).pack(
+            side="right", fill="y", padx=self._px(7), pady=self._px(8))
+        self._set_button_palette(self._btn["ask"], C_PANEL, C_ACCENT, C_ACCENT_SOFT)
 
         bottom = tk.Frame(self.root, bg=C_BG)
-        bottom.pack(side="bottom", fill="x", padx=self._px(16), pady=(self._px(4), self._px(9)))
+        bottom.pack(side="bottom", fill="x", padx=self._px(22), pady=(self._px(3), self._px(10)))
         self.msg_lbl = tk.Label(bottom, text="", bg=C_BG, fg=C_WARM, font=self._font(9), anchor="w")
         self.msg_lbl.pack(side="left", fill="x", expand=True)
+        self.delay_lbl = tk.Label(bottom, text="", bg=C_BG, fg=C_DIM, font=self._font(9))
+        self.delay_lbl.pack(side="right", padx=(self._px(12), 0))
         self.dev_lbl = tk.Label(bottom, text="默认设备", bg=C_BG, fg=C_DIM, font=self._font(9))
         self.dev_lbl.pack(side="right")
 
         self.workspace = tk.PanedWindow(self.root, orient="vertical", bg=C_BG, bd=0,
-                                        sashwidth=7, sashrelief="flat", relief="flat",
+                                        sashwidth=8, sashrelief="flat", relief="flat",
                                         opaqueresize=True, showhandle=False)
-        self.workspace.pack(fill="both", expand=True, padx=self._px(14), pady=(0, self._px(4)))
-        self.main_pane = tk.PanedWindow(self.workspace, orient="horizontal", bg=C_BORDER, bd=0,
-                                        sashwidth=7, sashrelief="flat", relief="flat",
+        self.workspace.pack(fill="both", expand=True, padx=self._px(20), pady=(0, self._px(5)))
+        self.main_pane = tk.PanedWindow(self.workspace, orient="horizontal", bg=C_BG, bd=0,
+                                        sashwidth=10, sashrelief="flat", relief="flat",
                                         opaqueresize=True, showhandle=False)
         self.workspace.add(self.main_pane, stretch="always")
 
         left = self._panel(self.main_pane)
-        self._section_head(left, "实时字幕", "听清讨论，也允许保留不确定文本", C_ACCENT)
-        sub = tk.Frame(left, bg=C_PANEL)
-        sub.pack(fill="x", padx=self._px(14), pady=(0, self._px(4)))
+        transcript_head = self._section_head(left, "实时字幕", "讨论记录 · 自动转写", C_ACCENT)
         self._follow_var = tk.BooleanVar(value=True)
-        self._check(sub, "跟随最新字幕", self._follow_var).pack(side="right")
+        self._check(transcript_head, "自动跟随", self._follow_var).pack(side="right")
         transcript_wrap = tk.Frame(left, bg=C_PANEL)
-        transcript_wrap.pack(fill="both", expand=True, padx=self._px(6), pady=(0, self._px(8)))
+        transcript_wrap.pack(fill="both", expand=True, padx=self._px(8), pady=(0, self._px(8)))
         self.transcript = self._text(transcript_wrap, int(get(self.cfg, "ui.font_transcript", 16)))
-        self.transcript.pack(side="left", fill="both", expand=True, padx=(self._px(8), 0))
-        self._scrollbar(transcript_wrap, self.transcript).pack(side="right", fill="y")
+        self.transcript.pack(side="left", fill="both", expand=True)
+        self._scrollbar(transcript_wrap, self.transcript).pack(side="right", fill="y", pady=self._px(8))
         self.transcript.tag_configure("ts", foreground=C_TS, font=self._font(10, mono=True))
         self.transcript.tag_configure("body", foreground=C_TEXT)
         self.transcript.tag_configure("uncertain", foreground=C_MUTED)
         self.transcript.tag_configure("partial", foreground=C_DIM)
-        self._set_text(self.transcript, "等待声音…\n播放会议声音后，实时字幕会显示在这里。\n")
+        self._set_text(self.transcript, "等待声音…\n\n播放会议声音后，实时字幕会显示在这里。\n")
         self.main_pane.add(left, minsize=280, stretch="always", width=650)
 
         right = tk.Frame(self.main_pane, bg=C_BG)
         right.grid_columnconfigure(0, weight=1)
         right.grid_rowconfigure(0, weight=5)
         right.grid_rowconfigure(1, weight=6)
-        answer_wrap = self._card(right, "应答思路", "先说结论，再补依据", C_WARM, C_ANSW_BG,
+        answer_wrap = self._card(right, "应答思路", "先结论，再依据", C_WARM, C_ANSW_BG,
                                  lambda: self._copy_text(self._displayed_text("answer")))
         answer_wrap.grid(row=0, column=0, sticky="nsew", pady=(0, self._px(5)))
         answer_nav = tk.Frame(answer_wrap, bg=C_ANSW_BG)
-        answer_nav.pack(fill="x", padx=self._px(10), pady=(self._px(4), 0))
+        answer_nav.pack(fill="x", padx=self._px(14), pady=(self._px(2), 0))
         self._btn["history_prev"] = self._button(
-            answer_nav, "‹ 上一组", lambda: self._navigate_history(-1), compact=True)
+            answer_nav, "‹", lambda: self._navigate_history(-1), compact=True)
         self._btn["history_next"] = self._button(
-            answer_nav, "下一组 ›", lambda: self._navigate_history(1), compact=True)
+            answer_nav, "›", lambda: self._navigate_history(1), compact=True)
+        for key in ("history_prev", "history_next"):
+            self._btn[key].configure(font=self._font(13), width=2)
         self._btn["freeze"] = self._button(
             answer_nav, "定格  F3", self.toggle_freeze, side="right", compact=True)
         self._history_status_lbl = tk.Label(
-            answer_nav, text="最新", bg=C_ANSW_BG, fg=C_DIM, font=self._font(8))
-        self._history_status_lbl.pack(side="right", padx=self._px(6))
+            answer_nav, text="最新", bg=C_ANSW_BG, fg=C_DIM, font=self._font(9))
+        self._history_status_lbl.pack(side="left", padx=self._px(5))
         self.answer_box = self._text(answer_wrap, int(get(self.cfg, "ui.font_answer", 14)))
-        self.answer_box.pack(fill="both", expand=True, padx=self._px(8), pady=(0, self._px(8)))
+        self.answer_box.pack(fill="both", expand=True, padx=self._px(7), pady=(0, self._px(7)))
         self._set_text(self.answer_box, "被提问或点击“被点名”后，这里显示可直接使用的回答要点。")
         script_wrap = self._card(right, "照读稿", "自然口语 · 可直接照着念", C_READ, C_READ_BG,
                                  lambda: self._copy_text(self._displayed_text("script")))
         script_wrap.grid(row=1, column=0, sticky="nsew", pady=(self._px(5), 0))
         self.script_box = self._text(script_wrap, int(get(self.cfg, "ui.font_script", 17)))
-        self.script_box.pack(fill="both", expand=True, padx=self._px(8), pady=(0, self._px(8)))
+        self.script_box.pack(fill="both", expand=True, padx=self._px(7), pady=(0, self._px(7)))
         self._set_text(self.script_box, "需要发言时按 F5，或与应答思路一起自动生成。")
         self.main_pane.add(right, minsize=340, stretch="always", width=560)
 
-        hints = self._panel(self.root)
-        hints.place_forget()  # 信息放入左栏底部，不占独立标签页
+        tk.Frame(left, bg=C_BORDER, height=1).pack(fill="x", padx=self._px(16))
         self.hints_wrap = tk.Frame(left, bg=C_PANEL)
-        self.hints_wrap.pack(fill="x", padx=self._px(14), pady=(0, self._px(10)))
+        self.hints_wrap.pack(fill="x", padx=self._px(17), pady=(self._px(6), self._px(10)))
         self.hint_labels: list[tk.Label] = []
         for _ in range(2):
             lbl = tk.Label(self.hints_wrap, text="", bg=C_PANEL, fg=C_MUTED,
                            font=self._font(9), anchor="w", justify="left", wraplength=500)
-            lbl.pack(fill="x", pady=self._px(1))
+            lbl.pack(fill="x", pady=self._px(2))
             self.hint_labels.append(lbl)
         left.bind("<Configure>", lambda _e: self._relayout_wrap(), add="+")
         self._build_ask_panel()
 
-    def _panel(self, parent) -> tk.Frame:
-        return tk.Frame(parent, bg=C_PANEL, highlightbackground=C_BORDER,
-                        highlightthickness=1, bd=0)
+    def _configure_ttk(self) -> None:
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure("MeetingCopilot.Vertical.TScrollbar", width=10,
+                        background=C_BTN, troughcolor=C_PANEL, bordercolor=C_PANEL,
+                        darkcolor=C_PANEL, lightcolor=C_PANEL, arrowcolor=C_MUTED)
+        style.map("MeetingCopilot.Vertical.TScrollbar",
+                  background=[("active", C_BTN_HOVER), ("pressed", C_BTN_HOVER)])
+        style.configure("MeetingCopilot.TCombobox", fieldbackground=C_ASK_BG,
+                        background=C_BTN, foreground=C_TEXT, arrowcolor=C_MUTED,
+                        bordercolor=C_BORDER, darkcolor=C_BORDER, lightcolor=C_BORDER,
+                        padding=5)
+        style.map("MeetingCopilot.TCombobox",
+                  fieldbackground=[("readonly", C_ASK_BG)],
+                  foreground=[("readonly", C_TEXT)],
+                  bordercolor=[("focus", C_ACCENT)])
+        self.root.option_add("*TCombobox*Listbox.background", C_CARD)
+        self.root.option_add("*TCombobox*Listbox.foreground", C_TEXT)
+        self.root.option_add("*TCombobox*Listbox.selectBackground", C_SELECT)
+        self.root.option_add("*TCombobox*Listbox.selectForeground", C_TEXT)
 
-    def _section_head(self, parent, title: str, subtitle: str, color: str) -> None:
+    def _panel(self, parent) -> tk.Frame:
+        return RoundedPanel(parent, bg=C_PANEL, radius=16, shadow=True)
+
+    def _section_head(self, parent, title: str, subtitle: str, color: str) -> tk.Frame:
         row = tk.Frame(parent, bg=C_PANEL)
-        row.pack(fill="x", padx=self._px(14), pady=(self._px(12), self._px(7)))
-        tk.Frame(row, bg=color, width=3).pack(side="left", fill="y")
+        row.pack(fill="x", padx=self._px(18), pady=(self._px(16), self._px(6)))
         tk.Label(row, text=title, bg=C_PANEL, fg=C_TEXT,
-                 font=self._font(12, "bold")).pack(side="left", padx=(self._px(8), 0))
-        tk.Label(row, text=subtitle, bg=C_PANEL, fg=C_DIM,
-                 font=self._font(9)).pack(side="right")
+                 font=self._font(12, "bold")).pack(side="left")
+        return row
 
     def _card(self, parent, title: str, subtitle: str, color: str, bg: str, copy_cmd) -> tk.Frame:
-        wrap = tk.Frame(parent, bg=bg, highlightbackground=C_BORDER, highlightthickness=1)
+        wrap = RoundedPanel(parent, bg=bg, radius=16, shadow=True)
         row = tk.Frame(wrap, bg=bg)
-        row.pack(fill="x", padx=self._px(12), pady=(self._px(9), 0))
-        tk.Label(row, text=title, bg=bg, fg=color, font=self._font(12, "bold")).pack(side="left")
-        tk.Label(row, text=subtitle, bg=bg, fg=C_DIM, font=self._font(9)).pack(side="left", padx=8)
+        row.pack(fill="x", padx=self._px(16), pady=(self._px(13), self._px(3)))
+        tk.Label(row, text=title, bg=bg, fg=C_TEXT,
+                 font=self._font(12, "bold")).pack(side="left")
         self._button(row, "复制", copy_cmd, side="right", compact=True)
         return wrap
 
     def _text(self, parent, size: int) -> tk.Text:
         txt = tk.Text(parent, bg=parent.cget("bg"), fg=C_TEXT, relief="flat", bd=0,
-                      highlightthickness=0, wrap="word", undo=False, cursor="arrow",
-                      font=self._font(size), width=1, height=4, padx=self._px(8),
-                      pady=self._px(7), spacing1=self._px(3), spacing3=self._px(5),
-                      selectbackground="#315784", inactiveselectbackground="#315784",
+                      highlightthickness=0, wrap="char", undo=False, cursor="arrow",
+                      font=self._font(size), width=1, height=4, padx=self._px(10),
+                      pady=self._px(9), spacing1=self._px(4), spacing3=self._px(7),
+                      selectbackground=C_SELECT, inactiveselectbackground=C_SELECT,
                       state="disabled")
         txt.bind("<MouseWheel>", lambda e: (txt.yview_scroll(int(-e.delta / 120), "units"), "break")[1])
         self._tk_texts.append(txt)
@@ -417,75 +685,115 @@ class OverlayUI:
 
     @staticmethod
     def _scrollbar(parent, widget) -> ttk.Scrollbar:
-        bar = ttk.Scrollbar(parent, orient="vertical", command=widget.yview)
+        bar = ttk.Scrollbar(parent, orient="vertical", command=widget.yview,
+                            style="MeetingCopilot.Vertical.TScrollbar")
         widget.configure(yscrollcommand=bar.set)
         return bar
 
+    @staticmethod
+    def _set_button_palette(btn: RoundedButton, bg: str, fg: str, hover: str) -> None:
+        btn._mc_bg = bg
+        btn._mc_fg = fg
+        btn._mc_hover = hover
+        btn.configure(bg=bg, fg=fg, activebackground=hover, activeforeground=fg,
+                      highlightbackground=bg)
+
     def _button(self, parent, text, command, *, accent=False, danger=False, side="left", compact=False):
-        bg = C_ACCENT if accent else (C_ERR_SOFT if danger else C_BTN)
-        fg = "#0c1420" if accent else (C_ERR if danger else C_TEXT)
-        hover = "#88baff" if accent else C_BTN_HOVER
-        btn = tk.Button(parent, text=text, command=command, bg=bg, fg=fg,
-                        activebackground=hover, activeforeground=fg, bd=0, relief="flat",
-                        font=self._font(9 if compact else 10, "bold"),
-                        padx=self._px(7 if compact else 11), pady=self._px(3 if compact else 6),
-                        cursor="hand2", highlightthickness=0, takefocus=0,
-                        disabledforeground=C_DIM)
-        btn.pack(side=side, padx=self._px(2))
-        btn.bind("<Enter>", lambda _e: btn.configure(bg=hover), add="+")
-        btn.bind("<Leave>", lambda _e: btn.configure(bg=bg), add="+")
+        bg = C_ACCENT if accent else str(parent.cget("bg"))
+        fg = "#FFFFFF" if accent else (C_ERR if danger else (C_MUTED if compact else C_TEXT))
+        hover = C_ACCENT_HOVER if accent else (C_ERR_SOFT if danger else C_BTN_HOVER)
+        btn = RoundedButton(
+            parent, text=text, command=command, bg=bg, fg=fg, hover=hover,
+            font=self._font(9 if compact else 10, "bold" if accent else "normal"),
+            padx=self._px(9 if compact else 14), pady=self._px(5 if compact else 8),
+            radius=9 if compact else 11)
+        self._set_button_palette(btn, bg, fg, hover)
+        if side is not None:
+            btn.pack(side=side, padx=self._px(2))
+        btn.bind("<Enter>", lambda _e, b=btn: b.set_hover(str(b.cget("state")) == "normal"), add="+")
+        btn.bind("<Leave>", lambda _e, b=btn: b.set_hover(False), add="+")
         return btn
 
     def _check(self, parent, text, variable, command=None) -> tk.Checkbutton:
         return tk.Checkbutton(parent, text=text, variable=variable, command=command,
-                              bg=parent.cget("bg"), fg=C_MUTED, selectcolor=C_CARD,
+                              bg=parent.cget("bg"), fg=C_MUTED, selectcolor=C_BG,
                               activebackground=parent.cget("bg"), activeforeground=C_TEXT,
                               highlightthickness=0, bd=0, font=self._font(9), cursor="hand2")
 
     # ------------------------------------------------------------ 自由提问会话
     def _build_ask_panel(self) -> None:
-        self.qa_frame = tk.Frame(self.workspace, bg=C_ASK_BG,
-                                 highlightbackground=C_BORDER, highlightthickness=1)
-        head = tk.Frame(self.qa_frame, bg=C_ASK_BG)
-        head.pack(fill="x", padx=self._px(12), pady=(self._px(8), self._px(4)))
-        tk.Label(head, text="自由提问", bg=C_ASK_BG, fg=C_ACCENT,
+        self.qa_frame = RoundedPanel(self.workspace, bg=C_PANEL, radius=16, shadow=True)
+        head = tk.Frame(self.qa_frame, bg=C_PANEL)
+        head.pack(fill="x", padx=self._px(16), pady=(self._px(13), self._px(9)))
+        tk.Label(head, text="自由提问", bg=C_PANEL, fg=C_TEXT,
                  font=self._font(12, "bold")).pack(side="left")
-        tk.Label(head, text="通用知识为主 · 历史仅在相关时参考", bg=C_ASK_BG, fg=C_DIM,
-                 font=self._font(9)).pack(side="left", padx=self._px(12))
-        self._button(head, "收起  Esc", self.toggle_ask_panel, side="right", compact=True)
-        self._button(head, "清空会话", self._clear_qa, side="right", compact=True)
-        self._button(head, "复制最新回答", self._copy_latest_qa, side="right", compact=True)
+        self._button(head, "收起", self.toggle_ask_panel, side="right", compact=True)
+        self._button(head, "清空", self._clear_qa, side="right", compact=True)
+        self._button(head, "复制", self._copy_latest_qa, side="right", compact=True)
         raw_memory = get(self.cfg, "brain.free_qa_memory", "smart")
         self.qa_memory_var = tk.BooleanVar(value=raw_memory not in (False, "off", "false", "0"))
-        self._check(head, "相关记忆", self.qa_memory_var, self._toggle_qa_memory).pack(side="right", padx=8)
-        body = tk.Frame(self.qa_frame, bg=C_ASK_BG)
-        body.pack(fill="both", expand=True, padx=self._px(10))
+        self._check(head, "相关记忆", self.qa_memory_var,
+                    self._toggle_qa_memory).pack(side="right", padx=self._px(8))
+
+        body = RoundedPanel(self.qa_frame, bg=C_ASK_BG, radius=10)
+        body.pack(fill="both", expand=True, padx=self._px(12))
         self.qa_box = self._text(body, int(get(self.cfg, "ui.font_qa", 13)))
-        self.qa_box.configure(bg=C_ASK_BG)
-        self.qa_box.pack(side="left", fill="both", expand=True)
-        self._scrollbar(body, self.qa_box).pack(side="right", fill="y")
-        self.qa_box.tag_configure("question", foreground=C_ACCENT, spacing1=8, spacing3=4)
-        self.qa_box.tag_configure("answer", foreground=C_TEXT, spacing3=10)
+        self.qa_box.configure(height=2)  # 空间不足时优先保留完整的三行输入框
+        self.qa_box.pack(side="left", fill="both", expand=True, padx=2, pady=2)
+        self._scrollbar(body, self.qa_box).pack(side="right", fill="y", pady=self._px(8))
+        self.qa_box.tag_configure("question", foreground=C_ACCENT, spacing1=9, spacing3=4)
+        self.qa_box.tag_configure("answer", foreground=C_TEXT, spacing3=11)
         self.qa_box.tag_configure("pending", foreground=C_DIM)
-        composer = tk.Frame(self.qa_frame, bg=C_ASK_BG)
-        composer.pack(fill="x", padx=self._px(10), pady=(self._px(6), self._px(10)))
-        entry_wrap = tk.Frame(composer, bg=C_CARD, highlightbackground=C_BORDER, highlightthickness=1)
-        entry_wrap.pack(side="left", fill="x", expand=True)
-        self.question_entry = tk.Text(entry_wrap, height=3, bg=C_CARD, fg=C_TEXT,
+
+        composer = tk.Frame(self.qa_frame, bg=C_PANEL)
+        composer.pack(fill="x", padx=self._px(14), pady=(self._px(10), self._px(13)))
+        editor = tk.Frame(composer, bg=C_PANEL)
+        editor.pack(fill="x")
+        entry_wrap = RoundedPanel(editor, bg=C_ASK_BG, radius=12)
+        entry_wrap.pack(side="left", fill="both", expand=True)
+        entry_wrap.grid_columnconfigure(0, weight=1)
+        entry_wrap.grid_rowconfigure(0, weight=1)
+        self.question_entry = tk.Text(entry_wrap, height=3, bg=C_ASK_BG, fg=C_TEXT,
                                       insertbackground=C_ACCENT, relief="flat", bd=0,
-                                      highlightthickness=0, wrap="word", undo=True,
+                                      highlightthickness=0, wrap="char", undo=True,
                                       font=self._font(int(get(self.cfg, "ui.font_qa", 13))),
-                                      padx=self._px(10), pady=self._px(7))
-        self.question_entry.pack(fill="both", expand=True)
+                                      padx=self._px(12), pady=self._px(9),
+                                      selectbackground=C_SELECT, selectforeground=C_TEXT)
+        self.question_entry.grid(row=0, column=0, sticky="nsew", padx=3, pady=3)
         self.question_entry.bind("<Return>", self._question_return)
         self.question_entry.bind("<Shift-Return>", self._question_newline)
         self.question_entry.bind("<Escape>", lambda _e: (self.toggle_ask_panel(), "break")[1])
         self._tk_texts.append(self.question_entry)
-        side = tk.Frame(composer, bg=C_ASK_BG)
-        side.pack(side="right", fill="y", padx=(self._px(8), 0))
-        self._button(side, "发送", self._send_question, accent=True).pack(fill="x")
-        tk.Label(side, text="Enter 发送\nShift+Enter 换行", bg=C_ASK_BG, fg=C_DIM,
-                 font=self._font(8), justify="center").pack(pady=self._px(5))
+
+        placeholder = tk.Label(self.question_entry, text="输入任何问题…",
+                               bg=C_ASK_BG, fg=C_DIM, font=self._font(10), cursor="xterm")
+        placeholder.place(x=self._px(13), y=self._px(10))
+
+        def sync_placeholder():
+            empty = not self.question_entry.get("1.0", "end-1c").strip()
+            focused = self.root.focus_get() is self.question_entry
+            if empty and not focused:
+                placeholder.place(x=self._px(13), y=self._px(10))
+            else:
+                placeholder.place_forget()
+
+        def focus_in(_event=None):
+            entry_wrap.configure(highlightbackground=C_ACCENT)
+            placeholder.place_forget()
+
+        def focus_out(_event=None):
+            entry_wrap.configure(highlightbackground=C_BORDER)
+            self.root.after_idle(sync_placeholder)
+
+        self.question_entry.bind("<FocusIn>", focus_in, add="+")
+        self.question_entry.bind("<FocusOut>", focus_out, add="+")
+        self.question_entry.bind("<KeyPress>", lambda _e: placeholder.place_forget(), add="+")
+        placeholder.bind("<Button-1>", lambda _e: self.question_entry.focus_set())
+        send = self._button(entry_wrap, "发送", self._send_question,
+                            accent=True, side=None, compact=True)
+        send.configure(font=self._font(10, "bold"), width=4)
+        send.grid(row=0, column=1, sticky="se",
+                  padx=(0, self._px(9)), pady=(0, self._px(8)))
         self._render_qa()
 
     def toggle_ask_panel(self) -> None:
@@ -497,13 +805,37 @@ class OverlayUI:
             except Exception:
                 pass
             self._qa_visible = False
+        else:
+            try:
+                self.workspace.add(self.qa_frame, minsize=230, stretch="never", height=330)
+            except Exception:
+                pass
+            self._qa_visible = True
+        self._refresh_command_labels()
+        self._set_button_palette(
+            self._btn["ask"], C_ACCENT_SOFT if self._qa_visible else C_PANEL,
+            C_ACCENT, C_ACCENT_SOFT_HOVER if self._qa_visible else C_ACCENT_SOFT)
+        if self._qa_visible:
+            self.root.after(40, lambda: self.question_entry and self.question_entry.focus_set())
+
+    def _refresh_command_labels(self) -> None:
+        if "ask" not in self._btn:
             return
-        try:
-            self.workspace.add(self.qa_frame, minsize=230, stretch="never", height=330)
-        except Exception:
-            pass
-        self._qa_visible = True
-        self.root.after(40, lambda: self.question_entry and self.question_entry.focus_set())
+        compact = self._compact_commands
+        labels = {
+            "capture": "看屏",
+            "script": "照读稿",
+            "im_asked": "被点名",
+            "summary": "小结",
+            "export": "导出" if compact else "导出纪要",
+        }
+        for key, text in labels.items():
+            self._btn[key].configure(text=text)
+        ask_text = "收起提问" if self._qa_visible else "自由提问"
+        if compact:
+            ask_text = "收起" if self._qa_visible else "提问"
+        self._btn["ask"].configure(text=f"{ask_text}  F2")
+        self._refresh_listen_btn()
 
     def _open_ask_bar(self) -> None:
         if not self._qa_visible:
@@ -562,17 +894,32 @@ class OverlayUI:
         w = self.qa_box
         w.configure(state="normal")
         w.delete("1.0", "end")
-        if not self._qa_order:
-            w.insert("end", "问任何技术问题，不必局限在知识库。历史问答会保留在这里。\n", ("pending",))
+        self._qa_last_question_index = None
         for rid in self._qa_order:
             turn = self._qa_turns[rid]
+            self._qa_last_question_index = w.index("end-1c")
             w.insert("end", "你  " + turn["question"].strip() + "\n", ("question",))
             answer = turn["answer"].strip() or ("正在思考…" if not turn["done"] else "未返回内容")
             if turn.get("error"):
                 answer += "\n" + turn["error"]
             w.insert("end", answer + "\n", ("answer" if turn["answer"] else "pending",))
         w.configure(state="disabled")
-        w.see("end")
+        self._scroll_qa_to_latest()
+        self.root.after_idle(self._scroll_qa_to_latest)
+
+    def _scroll_qa_to_latest(self) -> None:
+        """长回答跟随末尾；短问答避免最新问题只露出半行。"""
+        if not hasattr(self, "qa_box"):
+            return
+        w = self.qa_box
+        try:
+            w.yview_moveto(1.0)
+            marker = getattr(self, "_qa_last_question_index", None)
+            info = w.dlineinfo(marker) if marker else None
+            if info is not None and info[1] < 0:
+                w.yview_scroll(-1, "units")
+        except tk.TclError:
+            pass
 
     def _copy_latest_qa(self) -> None:
         for rid in reversed(self._qa_order):
@@ -704,7 +1051,7 @@ class OverlayUI:
         if self._frozen:
             text = "定格中"
         elif self._history_index is None:
-            text = f"最新 · 已存 {count} 组" if count else "最新"
+            text = "最新"
         else:
             text = f"历史 {self._history_index + 1}/{count}"
         self._history_status_lbl.configure(text=text, fg=C_WARM if self._frozen else C_DIM)
@@ -713,6 +1060,10 @@ class OverlayUI:
         self._btn["history_prev"].configure(state="normal" if prev_ok else "disabled")
         self._btn["history_next"].configure(state="normal" if next_ok else "disabled")
         self._btn["freeze"].configure(text="解除定格  F3" if self._frozen else "定格  F3")
+        self._set_button_palette(
+            self._btn["freeze"], C_WARM_SOFT if self._frozen else C_PANEL,
+            C_WARM if self._frozen else C_MUTED,
+            C_WARM_HOVER if self._frozen else C_BTN_HOVER)
 
     def _render_hints(self) -> None:
         for lbl, item in zip(self.hint_labels, self._hints[-2:]):
@@ -953,15 +1304,22 @@ class OverlayUI:
         self._session_sec = float(latest.session_sec or 0)
         self._delay = float(getattr(latest, "last_delay", 0) or 0)
         self._device = str(latest.device or "")
-        self.state_lbl.configure(text=status_text(self._listening, bool(latest.asr_ready), True))
+        self.state_lbl.configure(text=status_text(self._listening, bool(latest.asr_ready), True),
+                                 fg=C_TEXT if self._listening else C_MUTED)
         self.dot.configure(fg=C_OK if self._listening else C_DIM)
-        self.delay_lbl.configure(text=f"终句 {self._delay:.1f}s" if self._delay else "延迟 -")
+        self.timer_lbl.configure(fg=C_ACCENT if self._listening else C_TEXT)
+        self.delay_lbl.configure(text=f"{self._delay:.1f} s" if self._delay else "")
         self.dev_lbl.configure(text=short_device(self._device, 30))
         self._refresh_listen_btn()
 
     def _refresh_listen_btn(self) -> None:
-        if "listen" in self._btn:
-            self._btn["listen"].configure(text="Ⅱ 暂停聆听  F8" if self._listening else "▶ 开始聆听  F8")
+        if "listen" not in self._btn:
+            return
+        if self._compact_commands:
+            text = "Ⅱ 暂停  F8" if self._listening else "▶ 开始  F8"
+        else:
+            text = "Ⅱ 暂停聆听  F8" if self._listening else "▶ 开始聆听  F8"
+        self._btn["listen"].configure(text=text)
 
     def _refresh_clock(self) -> None:
         seconds = int(self._session_sec)
@@ -1038,7 +1396,7 @@ class OverlayUI:
             if self.root is not None:
                 self.root.title(f"{app_name} · {scenario_label(self.cfg)}")
             if hasattr(self, "app_title_lbl"):
-                self.app_title_lbl.configure(text=f"{app_name} · {scenario_label(self.cfg)}")
+                self.app_title_lbl.configure(text=app_name)
             changed = True
         if kw.get("screen") in ("primary", "secondary"):
             self.cfg.setdefault("ui", {})["screen"] = kw["screen"]
@@ -1057,52 +1415,126 @@ class OverlayUI:
                 pass
         win = tk.Toplevel(self.root)
         self._settings_win = win
+        win.withdraw()
         win.title("设置 · Meeting Copilot")
         win.configure(bg=C_BG)
         win.resizable(True, True)
-        win.minsize(440, 600)
+        win.transient(self.root)
         frame = tk.Frame(win, bg=C_BG)
-        frame.pack(fill="both", expand=True, padx=20, pady=16)
-        tk.Label(frame, text="设置", bg=C_BG, fg=C_TEXT, font=self._font(15, "bold")).pack(anchor="w", pady=(0, 12))
-        scenario_var = self._combo(frame, "使用场景（立即生效）", scenario_label(self.cfg), ["组会", "面试"])
+        frame.pack(fill="both", expand=True, padx=self._px(22), pady=self._px(20))
+        header = tk.Frame(frame, bg=C_BG)
+        header.pack(fill="x", pady=(0, self._px(14)))
+        tk.Label(header, text="设置", bg=C_BG, fg=C_TEXT,
+                 font=self._font(18, "bold")).pack(side="left")
+
+        footer = tk.Frame(frame, bg=C_BG)
+        footer.pack(side="bottom", fill="x", pady=(self._px(14), 0))
+        body = tk.Frame(frame, bg=C_BG)
+        body.pack(fill="both", expand=True)
+        canvas = tk.Canvas(body, bg=C_BG, bd=0, highlightthickness=0)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar = self._scrollbar(body, canvas)
+        content = tk.Frame(canvas, bg=C_BG)
+        pane = canvas.create_window((0, 0), window=content, anchor="nw")
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(pane, width=e.width))
+
+        def sync_scrollbar(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            needed = content.winfo_reqheight() > canvas.winfo_height() + 2
+            if needed and not scrollbar.winfo_ismapped():
+                scrollbar.pack(side="right", fill="y", padx=(self._px(8), 0))
+            elif not needed and scrollbar.winfo_ismapped():
+                scrollbar.pack_forget()
+
+        content.bind("<Configure>", sync_scrollbar)
+        canvas.bind("<Configure>", sync_scrollbar, add="+")
+        win.bind("<MouseWheel>", lambda e: (
+            canvas.yview_scroll(int(-e.delta / 120), "units"), "break")[1])
+
+        meeting = self._settings_group(content, "场景与识别")
+        scenario_var = self._combo(meeting, "使用场景", scenario_label(self.cfg), ["组会", "面试"])
+        self._settings_rule(meeting)
         devices, _ = list_output_devices_safe(self.log)
-        dev_var = self._combo(frame, "会议输出设备", str(get(self.cfg, "audio.device", "auto")), ["auto"] + devices)
-        asr_var = self._combo(frame, "识别模型（重启后生效）", str(get(self.cfg, "asr.model", "small")),
+        dev_var = self._combo(meeting, "输出设备", str(get(self.cfg, "audio.device", "auto")),
+                              ["auto"] + devices)
+        self._settings_rule(meeting)
+        asr_var = self._combo(meeting, "识别模型", str(get(self.cfg, "asr.model", "small")),
                               ["small", "large-v3-turbo"])
-        scr_var = self._combo(frame, "初始屏幕", str(get(self.cfg, "ui.screen", "secondary")),
-                              ["primary", "secondary"])
-        size_var = self._combo(frame, "窗口预设（也可拖边框 / 系统最大化）", "普通窗口",
+        tk.Label(meeting, text="模型重启后生效；turbo 更慢，不保证所有片段更准。",
+                 bg=C_PANEL, fg=C_DIM, font=self._font(9), anchor="w",
+                 justify="left").pack(fill="x", padx=self._px(16), pady=(0, self._px(13)))
+
+        window_group = self._settings_group(content, "窗口")
+        screen = str(get(self.cfg, "ui.screen", "secondary"))
+        scr_var = self._combo(window_group, "初始屏幕",
+                              "主屏幕" if screen == "primary" else "副屏幕", ["主屏幕", "副屏幕"])
+        self._settings_rule(window_group)
+        size_var = self._combo(window_group, "窗口预设", "普通窗口",
                                ["普通窗口", "系统最大化", "2/3 屏幕", "1/2 屏幕"])
-        font_var = self._combo(frame, "界面缩放", f"{int(round(self._font_scale*100))}%",
+        self._settings_rule(window_group)
+        font_var = self._combo(window_group, "界面缩放", f"{int(round(self._font_scale*100))}%",
                                ["80%", "90%", "100%", "110%", "125%", "140%", "150%"])
+        self._settings_rule(window_group)
         top_var = tk.BooleanVar(value=bool(get(self.cfg, "ui.split_topmost", False)))
-        self._check(frame, "窗口始终置顶", top_var).pack(anchor="w", pady=8)
-        tk.Label(frame, text="small 为实时档；turbo 更慢，不保证所有片段更准。",
-                 bg=C_BG, fg=C_DIM, font=self._font(9)).pack(anchor="w", pady=4)
-        bar = tk.Frame(frame, bg=C_BG)
-        bar.pack(fill="x", pady=(14, 0))
+        top_check = self._check(window_group, "窗口始终置顶", top_var)
+        top_check.configure(font=self._font(10))
+        top_check.pack(anchor="w", padx=self._px(16), pady=self._px(10))
+
         def save():
             scenario = "interview" if scenario_var.get() == "面试" else "meeting"
+            screen = "primary" if scr_var.get() == "主屏幕" else "secondary"
             try:
                 self.bus.command("apply_settings", device=dev_var.get() or "auto",
-                                 model=asr_var.get(), screen=scr_var.get(), scenario=scenario)
+                                 model=asr_var.get(), screen=screen, scenario=scenario)
             except Exception:
                 pass
-            self.apply_settings(screen=scr_var.get(), scenario=scenario)
+            self.apply_settings(screen=screen, scenario=scenario)
             self._apply_size_mode({"系统最大化": "full", "2/3 屏幕": "2/3", "1/2 屏幕": "1/2"}.get(size_var.get(), "normal"))
             self.root.attributes("-topmost", bool(top_var.get()))
             self.cfg.setdefault("ui", {})["split_topmost"] = bool(top_var.get())
             self.apply_font_scale(int(font_var.get().replace("%", "")) / 100)
             self._close_settings()
-        self._button(bar, "保存", save, accent=True, side="right")
-        self._button(bar, "取消", self._close_settings, side="right")
+
+        self._settings_save = save
+        self._button(footer, "保存", save, accent=True, side="right")
+        self._button(footer, "取消", self._close_settings, side="right")
         win.protocol("WM_DELETE_WINDOW", self._close_settings)
+        win.bind("<Escape>", lambda _e: self._close_settings())
+        win.update_idletasks()
+        width = min(self._px(620), win.winfo_screenwidth() - 60)
+        chrome = (header.winfo_reqheight() + footer.winfo_reqheight() + self._px(74))
+        height = min(content.winfo_reqheight() + chrome, win.winfo_screenheight() - 60)
+        height = max(self._px(540), height)
+        win.minsize(min(self._px(500), width), min(self._px(540), height))
+        x = max(20, min(self.root.winfo_rootx() + self.root.winfo_width() - width - 30,
+                        win.winfo_screenwidth() - width - 20))
+        y = max(20, min(self.root.winfo_rooty() + 30, win.winfo_screenheight() - height - 20))
+        win.geometry(f"{width}x{height}+{x}+{y}")
+        win.deiconify()
+        win.lift()
+        win.focus_set()
+
+    def _settings_group(self, parent, title: str) -> tk.Frame:
+        tk.Label(parent, text=title, bg=C_BG, fg=C_MUTED,
+                 font=self._font(10, "bold")).pack(
+                     anchor="w", padx=self._px(4), pady=(self._px(12), self._px(6)))
+        group = RoundedPanel(parent, bg=C_PANEL, radius=14)
+        group.pack(fill="x", pady=(0, self._px(8)))
+        return group
+
+    def _settings_rule(self, parent) -> None:
+        tk.Frame(parent, bg=C_BORDER, height=1).pack(
+            fill="x", padx=(self._px(16), 0))
 
     def _combo(self, parent, label: str, value: str, values: list[str]) -> tk.StringVar:
-        tk.Label(parent, text=label, bg=C_BG, fg=C_MUTED, font=self._font(10)).pack(anchor="w", pady=(8, 3))
+        row = tk.Frame(parent, bg=C_PANEL)
+        row.pack(fill="x", padx=self._px(16), pady=self._px(8))
+        tk.Label(row, text=label, bg=C_PANEL, fg=C_TEXT,
+                 font=self._font(10)).pack(side="left", padx=(0, self._px(14)))
         var = tk.StringVar(value=value)
-        ttk.Combobox(parent, textvariable=var, values=values, state="readonly",
-                     font=self._font(10)).pack(fill="x", ipady=4)
+        ttk.Combobox(row, textvariable=var, values=values, state="readonly",
+                     style="MeetingCopilot.TCombobox", width=24,
+                     font=self._font(10)).pack(side="right")
         return var
 
     def _close_settings(self) -> None:
@@ -1112,6 +1544,7 @@ class OverlayUI:
             except Exception:
                 pass
         self._settings_win = None
+        self._settings_save = None
 
     # ------------------------------------------------------------ 对外
     def register_actions(self, actions: dict[str, Callable[..., Any]]) -> None:
@@ -1239,28 +1672,99 @@ def _selftest() -> int:
         checks.append(("历史可前后回看并返回最新", previous_ok and first_ok and next_ok and latest_ok))
 
     def shot():
+        ui._btn["ask"].invoke()
+        ui.root.update()
+        click_closed = not ui._qa_visible
+        ui._btn["ask"].invoke()
+        ui.root.update()
+        checks.append(("圆角按钮支持真实点击", click_closed and ui._qa_visible))
         checks.extend([
             ("原生窗口可自由拉伸", ui.root.resizable() == (True, True) and not ui.root.overrideredirect()),
             ("看屏等动作按钮可用", all(ui._btn[k].cget("state") == "normal" for k in ("listen", "capture", "script"))),
             ("左右分栏可拖动", isinstance(ui.main_pane, tk.PanedWindow)),
-            ("F2 展开多行提问区", ui._qa_visible and isinstance(ui.question_entry, tk.Text)),
+            ("F2 展开三行提问区", ui._qa_visible and isinstance(ui.question_entry, tk.Text)
+             and ui.question_entry.winfo_height() >= 60),
             ("两轮问题均已发送", len(sent) == 2 and "第二轮" in sent[1]),
             ("问答历史完整保留", all(x in ui.qa_box.get("1.0", "end") for x in ("GAN", "第二轮问题", "失败案例"))),
             ("实时字幕已渲染", "多模态视频生成" in ui.transcript.get("1.0", "end")),
             ("应答与照读稿已渲染", "第三轮" in ui.answer_box.get("1.0", "end") and "第三组照读稿" in ui.script_box.get("1.0", "end")),
         ])
+        ui._open_settings()
+        ui.root.update()
+        settings_win = ui._settings_win
+        save_settings = ui._settings_save
+        settings_ok = (settings_win is not None and settings_win.cget("bg") == C_BG and
+                       settings_win.resizable() == (True, True) and callable(save_settings))
+        checks.append(("设置窗口使用统一浅色主题", settings_ok))
+        time.sleep(0.3)
+        ui.root.update()
+        try:
+            img = ImageGrab.grab()
+            x, y = settings_win.winfo_rootx(), settings_win.winfo_rooty()
+            out = ROOT / "docs" / "images" / "meeting-copilot-settings.png"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            img.crop((x, y, x + settings_win.winfo_width(), y + settings_win.winfo_height())).save(out)
+            checks.append(("设置窗口截图成功", out.exists()))
+        except Exception as e:
+            checks.append((f"设置截图失败：{e}", False))
+
+        def packed_canvas(widget):
+            for child in widget.winfo_children():
+                if (isinstance(child, tk.Canvas) and not isinstance(child, RoundedButton)
+                        and child.winfo_manager() == "pack"):
+                    return child
+                found = packed_canvas(child)
+                if found is not None:
+                    return found
+            return None
+
+        settings_win.geometry("560x540+60+60")
+        ui.root.update()
+        canvas = packed_canvas(settings_win)
+        if canvas is not None:
+            canvas.yview_moveto(1.0)
+            ui.root.update()
+        scroll_ok = canvas is not None and canvas.yview()[0] > 0
+        if not scroll_ok:
+            print("[CHECK] 设置滚动", settings_win.geometry(),
+                  None if canvas is None else (canvas.yview(), canvas.cget("scrollregion"),
+                                                canvas.bbox("all"), canvas.winfo_height()))
+        checks.append(("设置窗口缩小后可滚动", scroll_ok))
+        if callable(save_settings):
+            save_settings()
+        checks.append(("设置可保存并关闭", ui._settings_win is None and ui._settings_save is None))
+        base_size = ui._btn["listen"].cget("font")[1]
+        ui.apply_font_scale(1.1)
+        scaled_size = ui._btn["listen"].cget("font")[1]
+        ui.apply_font_scale(1.0)
+        ui.root.update()
+        checks.append(("圆角控件支持界面缩放", scaled_size > base_size and
+                       ui._btn["listen"].cget("font")[1] == base_size))
         ui.apply_settings(scenario="interview")
         ui.root.update_idletasks()
         checks.append(("场景可即时切换为面试", scenario_label(ui.cfg) == "面试" and
-                       ui.root.title().endswith("面试")))
+                       ui.root.title().endswith("面试") and
+                       ui.app_title_lbl.cget("text") == "Meeting Copilot"))
         ui.apply_settings(scenario="meeting")
         ui.root.update_idletasks()
         checks.append(("场景可切回组会", scenario_label(ui.cfg) == "组会" and
-                       ui.root.title().endswith("组会")))
+                       ui.root.title().endswith("组会") and
+                       ui.app_title_lbl.cget("text") == "Meeting Copilot"))
         ui.root.state("normal")
         ui.root.geometry("1120x760+40+40")
-        ui.root.update_idletasks()
+        ui.root.update()
         checks.append(("普通窗口尺寸可调整", ui.root.winfo_width() == 1120 and ui.root.winfo_height() == 760))
+        command_keys = ("listen", "capture", "script", "im_asked", "summary", "export", "ask")
+        checks.append(("窄窗口顶部操作完整可见", all(
+            ui._btn[k].winfo_x() >= 0 and
+            ui._btn[k].winfo_x() + ui._btn[k].winfo_width() <= ui._btn[k].master.winfo_width()
+            for k in command_keys)))
+        ui.root.geometry("800x650+40+40")
+        ui.root.update()
+        checks.append(("800 像素宽度使用紧凑命令", ui._compact_commands and all(
+            ui._btn[k].winfo_x() >= 0 and
+            ui._btn[k].winfo_x() + ui._btn[k].winfo_width() <= ui._btn[k].master.winfo_width()
+            for k in command_keys)))
         ui.root.state("zoomed")
         ui.root.update()
         checks.append(("支持系统最大化", ui.root.state() == "zoomed"))
@@ -1269,7 +1773,18 @@ def _selftest() -> int:
         ui.root.attributes("-topmost", True)
         ui.root.lift()
         ui.root.focus_force()
+        ui._btn["listen"].focus_set()  # 收起输入法候选框，不遮挡演示截图
         ui.root.update()
+        ui.root.focus_set()
+        ui._follow_after_resize()
+        ui.root.update()
+        checks.append(("缩放后字幕跟随最新", ui.transcript.yview()[1] >= 0.99))
+        question_info = ui.qa_box.dlineinfo(ui._qa_last_question_index)
+        answer_info = ui.qa_box.dlineinfo("end-2c")
+        checks.append(("最新问题与回答完整可见",
+                       question_info is not None and question_info[1] >= 0 and
+                       answer_info is not None and answer_info[1] >= 0 and
+                       answer_info[1] + answer_info[3] <= ui.qa_box.winfo_height()))
         time.sleep(0.5)  # 等 Windows DWM 完成合成，避免截到遮挡窗口残影
         ui.root.update()
         try:
