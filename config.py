@@ -18,7 +18,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-PROJECT_DIR = Path(__file__).resolve().parent
+# 源码运行时指向项目目录；打包后指向 exe 所在目录，保证配置与输出可写。
+# PyInstaller 的只读资源仍在 sys._MEIPASS，不把这些资源误当用户数据目录。
+PROJECT_DIR = (Path(sys.executable).resolve().parent if getattr(sys, "frozen", False)
+               else Path(__file__).resolve().parent)
+RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", PROJECT_DIR))
 CONFIG_PATH = PROJECT_DIR / "config.yaml"
 CRED_PATH = Path.home() / ".dsh" / ".credentials.yaml"
 

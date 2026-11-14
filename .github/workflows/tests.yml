@@ -27,6 +27,8 @@ jobs:
         shell: pwsh
       - name: Compile core modules
         run: python -m py_compile main.py brain.py vision_reader.py ui_split.py session_store.py scenarios.py config.py asr_engine.py tools/build_kb.py
+      - name: Packaging and model-download policy tests
+        run: python tests/test_packaging.py
       - name: Audio and ASR offline tests
         run: python tests/test_audio_asr.py
       - name: Brain, memory and vision offline tests

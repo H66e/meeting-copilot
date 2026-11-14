@@ -2,7 +2,7 @@
 # Copy to config.yaml, set API keys through environment variables, then restart.
 app:
   name: Meeting Copilot
-  version: "0.2"
+  version: "0.2.0"
   scenario: meeting          # meeting=组会 | interview=面试
   user_names: []             # 可选：听到这些名字时立即准备应答，例如 ["小明"]
   save_transcripts: true
@@ -22,6 +22,7 @@ audio:
 
 asr:
   model: small               # small=实时优先；large-v3-turbo=更慢的可选档位
+  allow_download: true       # 本地无模型时下载 Whisper；false 或 MC_OFFLINE=1 禁止联网
   compute_type: int8
   cpu_threads: 12
   without_timestamps: true

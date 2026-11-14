@@ -852,6 +852,47 @@ class App:
         st.message = self._last_msg if now < self._msg_until else ""
         self.bus.emit_status(Status(**st.__dict__))
 
+    def smoke_test(self) -> int:
+        """打包启动自验：真实建窗，但不启动音频、模型下载、API 或全局热键。"""
+        errors = [f"模块不可用: {name}" for name, module in MODULES.items() if module is None]
+        if self.ui is None:
+            errors.append("界面未初始化")
+        if errors:
+            self.log.error("SMOKE_TEST_FAILED: %s", "; ".join(errors))
+            return 1
+        try:
+            self.ui.start()
+
+            def finish():
+                try:
+                    self.ui._open_ask_bar()
+                    self.ui.root.update_idletasks()
+                    if not self.ui.root.winfo_viewable():
+                        errors.append("窗口不可见")
+                    if self.ui.question_entry is None or not self.ui._qa_visible:
+                        errors.append("自由提问区未展开")
+                    if self.ui.root.winfo_width() < 760:
+                        errors.append("窗口宽度不足")
+                except Exception as e:  # noqa: BLE001
+                    errors.append(f"窗口检查失败: {type(e).__name__}: {e}")
+                finally:
+                    self.ui.stop()
+
+            self.ui.root.after(1200, finish)
+            self.ui.run()
+            self._stop.set()
+        except Exception:  # noqa: BLE001
+            errors.append(traceback.format_exc())
+            try:
+                self.ui.stop()
+            except Exception:
+                pass
+        if errors:
+            self.log.error("SMOKE_TEST_FAILED: %s", "; ".join(errors))
+            return 1
+        self.log.info("SMOKE_TEST_OK: 全部模块可导入，窗口与自由提问区可用；未启动音频、模型或 API")
+        return 0
+
     # ------------------------------------------------------------ 主循环
     def run(self) -> int:
         self.log.info("Meeting Copilot启动 | 配置=%s | fake=%s | no_ui=%s",
@@ -976,6 +1017,8 @@ def main() -> int:
     ap.add_argument("--fake", action="store_true", help="假数据演示（无需音频设备）")
     ap.add_argument("--no-ui", action="store_true", help="无界面控制台模式")
     ap.add_argument("--check", action="store_true", help="仅环境自检")
+    ap.add_argument("--smoke-test", action="store_true",
+                    help="打包启动自验：真实建窗后退出，不启动音频、模型或 API")
     ap.add_argument("--scenario", choices=("meeting", "interview"), default=None,
                     help="本次运行覆盖配置中的使用场景")
     ap.add_argument("--config", default=None, help="配置文件路径")
@@ -993,7 +1036,9 @@ def main() -> int:
             print(f"自检模块不可用: {e}")
             return 1
 
-    app = App(cfg, fake=args.fake, no_ui=args.no_ui)
+    app = App(cfg, fake=args.fake or args.smoke_test, no_ui=args.no_ui)
+    if args.smoke_test:
+        return app.smoke_test()
     return app.run()
 
 

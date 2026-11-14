@@ -30,6 +30,8 @@ from typing import Any, Optional
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
+from config import PROJECT_DIR
+_ROOT = PROJECT_DIR
 
 ICON = {"ok": "✅", "warn": "⚠️", "fail": "❌", "skip": "⏭️"}
 

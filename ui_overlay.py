@@ -36,7 +36,8 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 if __name__ == "__main__" or True:  # noqa: SIM108 - 允许以脚本方式直接运行
-    _ROOT = Path(__file__).resolve().parent
+    from config import PROJECT_DIR
+    _ROOT = PROJECT_DIR
     if str(_ROOT) not in sys.path:
         sys.path.insert(0, str(_ROOT))
 

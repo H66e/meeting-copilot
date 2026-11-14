@@ -15,7 +15,9 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-ROOT = Path(__file__).resolve().parent
+from config import PROJECT_DIR, RESOURCE_DIR
+
+ROOT = PROJECT_DIR
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -448,6 +450,12 @@ class OverlayUI:
             return
         self.root = tk.Tk()
         self.root.withdraw()
+        try:
+            icon = RESOURCE_DIR / "assets" / "app.ico"
+            if icon.exists():
+                self.root.iconbitmap(default=str(icon))
+        except tk.TclError:
+            pass
         app_name = str(get(self.cfg, "app.name", "Meeting Copilot") or "Meeting Copilot")
         self.root.title(f"{app_name} · {scenario_label(self.cfg)}")
         self.root.configure(bg=C_BG)

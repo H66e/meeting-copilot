@@ -339,6 +339,8 @@ class AsrEngine:
         self._log = log or get_logger("asr")
         a = self.cfg.get("asr") if isinstance(self.cfg.get("asr"), dict) else {}
         self.model_name = str(a.get("model", _DEFAULT_ASR["model"]) or "small")
+        self.allow_download = bool(a.get("allow_download", True)) and not (
+            os.environ.get("MC_OFFLINE", "").lower() in ("1", "true", "yes"))
         self.compute_type = str(a.get("compute_type", _DEFAULT_ASR["compute_type"]) or "int8")
         self.cpu_threads = int(a.get("cpu_threads", _DEFAULT_ASR["cpu_threads"]) or 12)
         self.language = str(a.get("language", _DEFAULT_ASR["language"]) or "zh")
@@ -411,13 +413,18 @@ class AsrEngine:
             self._log.info("加载 whisper 模型: %s -> %s (cpu/%s, threads=%d)",
                            self.model_name, ref, self.compute_type, self.cpu_threads)
             try:
-                self._model = WhisperModel(
-                    ref,
-                    device="cpu",
-                    compute_type=self.compute_type,
-                    cpu_threads=self.cpu_threads,
-                    local_files_only=True,
-                )
+                kwargs = dict(device="cpu", compute_type=self.compute_type,
+                              cpu_threads=self.cpu_threads)
+                try:
+                    self._model = WhisperModel(ref, local_files_only=True, **kwargs)
+                except Exception:
+                    remote = MODEL_ALIASES.get(self.model_name, self.model_name)
+                    custom_dir = Path(self.model_name).expanduser().is_dir()
+                    if not self.allow_download or custom_dir or "/" not in remote:
+                        raise
+                    self._log.info("本地模型未就绪，下载 Whisper 模型（不发送音频）: %s", remote)
+                    self._model = WhisperModel(remote, local_files_only=False, **kwargs)
+                    self._resolved_ref = remote
             except Exception as e:
                 self._log.error("whisper 模型加载失败（%s）: %s", ref, e)
                 raise RuntimeError(f"无法加载 whisper 模型 {self.model_name}: {e}") from e

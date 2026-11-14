@@ -30,7 +30,15 @@
 - 可正常播放声音的输出设备
 - 一个或多个 OpenAI 兼容 API；不使用云端功能时仍可单独运行本地转写
 
-## 安装
+## Windows 免安装版
+
+从 [Releases](https://github.com/H66e/meeting-copilot/releases) 下载 Windows x64 ZIP，解压后双击 `MeetingCopilot.exe`，无需安装 Python。程序不附带 API 密钥和 Whisper 模型；首次语音识别需要下载模型，也可以提前准备本地模型后离线使用。
+
+详见 [Windows 免安装版使用与构建说明](docs/RELEASE_WINDOWS.md)。
+
+## 源码安装
+
+需要 Python 3.14（当前开发环境）。
 
 ```bash
 git clone https://github.com/H66e/meeting-copilot.git

@@ -32,7 +32,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
-from config import get
+from config import PROJECT_DIR, get
 from logging_setup import get_logger
 
 # ------------------------------------------------------------------ 常量
@@ -287,7 +287,7 @@ class KnowledgeBase:
         data_dir = (cfg.get("_dirs") or {}).get("data") or ""
         if data_dir:
             return Path(data_dir) / "kb"
-        return Path(__file__).resolve().parent / "data" / "kb"
+        return PROJECT_DIR / "data" / "kb"
 
     # ---- 加载
     def load(self) -> bool:
