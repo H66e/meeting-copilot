@@ -626,6 +626,17 @@ def t_vision_ocr_fallback():
     assert ev2.done and ev2.full_text.strip(), "OCR 也失败时必须返回非空提示文本"
 
 
+@case("18b. OCR 输出兼容：RapidOCR 3.x 对象与旧版列表")
+def t_ocr_result_formats():
+    class ModernOutput:
+        txts = ["页面标题", "", "关键指标"]
+
+    assert VisionReader._ocr_text(ModernOutput()) == "页面标题\n关键指标"
+    legacy = [[[0, 0, 1, 1], "第一行", 0.99], [[0, 2, 1, 3], "第二行", 0.98]]
+    assert VisionReader._ocr_text(legacy) == "第一行\n第二行"
+    assert VisionReader._ocr_text([]) == ""
+
+
 @case("19. 知识库空时 Brain 不崩、无知识库上下文也能正常构造 prompt")
 def t_brain_empty_kb():
     cfg = load_config()

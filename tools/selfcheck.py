@@ -125,7 +125,7 @@ _CORE_DEPS = [
     ("soundcard", "soundcard"), ("jieba", "jieba"),
 ]
 _OPTIONAL_DEPS = [
-    ("opencv-python", "cv2"), ("rapidocr-onnxruntime", "rapidocr_onnxruntime"),
+    ("opencv-python", "cv2"), ("rapidocr", "rapidocr"),
     ("pypdf", "pypdf"), ("python-docx", "docx"), ("python-pptx", "pptx"),
 ]
 

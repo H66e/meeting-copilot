@@ -388,26 +388,39 @@ class VisionReader:
         return base64.b64encode(buf.getvalue()).decode("ascii")
 
     # ---------------------------------------------------------- 本地 OCR 兜底
+    @staticmethod
+    def _ocr_text(result: object) -> str:
+        """兼容 RapidOCR 3.x 输出对象与旧版 (文本框, 文本, 分数) 列表。"""
+        txts = getattr(result, "txts", None)
+        if txts is not None:
+            return "\n".join(str(text).strip() for text in txts if str(text).strip())[:4000]
+        lines = []
+        for item in result or []:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                text = str(item[1] or "").strip()
+                if text:
+                    lines.append(text)
+        return "\n".join(lines)[:4000]
+
     def ocr(self, image: Image.Image) -> str:
-        """rapidocr 本地 OCR。失败返回空串（不抛）。"""
+        """RapidOCR 本地 OCR；优先新包，兼容旧包。失败返回空串。"""
         try:
             import numpy as np
-            from rapidocr_onnxruntime import RapidOCR
+            try:
+                from rapidocr import RapidOCR
+                modern = True
+            except ImportError:
+                from rapidocr_onnxruntime import RapidOCR
+                modern = False
 
             if self._ocr_engine is None:
                 self._ocr_engine = RapidOCR()
-            arr = np.array(image.convert("RGB"))[:, :, ::-1]  # RGB -> BGR
-            result, _elapse = self._ocr_engine(arr)
-            if not result:
-                return ""
-            lines = []
-            for item in result:
-                if isinstance(item, (list, tuple)) and len(item) >= 2:
-                    txt = str(item[1] or "").strip()
-                    if txt:
-                        lines.append(txt)
-            text = "\n".join(lines)
-            return text[:4000]
+            arr = np.array(image.convert("RGB"))[:, :, ::-1]
+            output = self._ocr_engine(arr)
+            if modern:
+                return self._ocr_text(output)
+            result, _elapse = output
+            return self._ocr_text(result)
         except Exception as e:
             self.log.warning("本地 OCR 失败：%s", e)
             return ""
