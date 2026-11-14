@@ -15,4 +15,4 @@ keyboard>=0.13.5
 python-docx>=1.1
 python-pptx>=1.0
 pypdf>=4
-opencc-python-reimplemented>=0.1  # 繁->简，可选
+# 繁简转换增强包见 requirements-optional.txt；未安装时使用内置映射。

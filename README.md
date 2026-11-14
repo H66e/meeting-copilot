@@ -48,6 +48,12 @@ PowerShell 激活虚拟环境可使用：
 .venv\Scripts\Activate.ps1
 ```
 
+繁简转换增强包是可选依赖；安装失败不影响核心功能，程序会使用内置映射：
+
+```bash
+python -m pip install -r requirements-optional.txt
+```
+
 首次下载 Whisper 模型需要网络，模型缓存由 faster-whisper／Hugging Face 管理。`small` 适合先跑通；更高精度档位会增加内存与计算开销，请以你的机器实测为准。
 
 ## 配置 API
