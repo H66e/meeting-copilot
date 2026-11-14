@@ -1,0 +1,49 @@
+# Local configuration and credentials
+config.yaml
+.env
+.env.*
+!.env.example
+*.local.yaml
+*.local.yml
+
+# Private meeting data and generated artifacts
+data/
+records/
+exports/
+logs/
+
+# Local development / live-meeting probes
+_dev_test/
+INTERFACES.md
+README_使用说明.md
+启动组会助手.bat
+一键体检.bat
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and packaging
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.bak
+*.log

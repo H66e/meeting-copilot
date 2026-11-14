@@ -1,0 +1,24 @@
+name: 功能建议
+description: 描述使用场景和希望改善的体验
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 当前问题
+      description: 在组会、面试练习或复盘中遇到什么摩擦？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 希望怎样操作，怎样判断功能有效？
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 替代方案与影响
+      description: 是否涉及隐私、模型兼容性、延迟或界面变化？

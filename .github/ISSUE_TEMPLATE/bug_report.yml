@@ -1,0 +1,40 @@
+name: 问题报告
+description: 报告可复现的问题，请勿附真实会议或个人信息
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 请使用合成示例和脱敏日志。不要上传密钥、原始录音、私人材料或未公开屏幕内容。
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤
+      description: 从启动命令到问题出现的完整步骤
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期与实际行为
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 环境
+      placeholder: Windows 11 / Python 3.14 / commit
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 脱敏错误日志
+      render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 隐私确认
+      options:
+        - label: 我已移除密钥、真实姓名、会议内容和私人路径
+          required: true

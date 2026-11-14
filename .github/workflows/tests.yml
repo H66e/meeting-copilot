@@ -1,0 +1,39 @@
+name: offline-tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+        shell: bash
+      - name: Prepare public configuration
+        run: Copy-Item config.example.yaml config.yaml
+        shell: pwsh
+      - name: Compile core modules
+        run: python -m py_compile main.py brain.py vision_reader.py ui_split.py session_store.py scenarios.py config.py asr_engine.py tools/build_kb.py
+      - name: Audio and ASR offline tests
+        run: python tests/test_audio_asr.py
+      - name: Brain, memory and vision offline tests
+        run: python tests/test_brain_vision.py
+      - name: UI and hotkey logic tests
+        run: python tests/test_ui_hotkeys.py
+      - name: Scenario and privacy tests
+        run: python tests/test_scenarios.py
+      - name: Empty knowledge-base dry run
+        run: python tools/build_kb.py --dry-run

@@ -1,0 +1,141 @@
+# Meeting Copilot public configuration template.
+# Copy to config.yaml, set API keys through environment variables, then restart.
+app:
+  name: Meeting Copilot
+  version: "0.2"
+  scenario: meeting          # meeting=组会 | interview=面试
+  user_names: []             # 可选：听到这些名字时立即准备应答，例如 ["小明"]
+  save_transcripts: true
+
+audio:
+  sample_rate: 16000
+  device: auto               # 默认扬声器回环；耳机播放同样可抓取
+  capture_all_outputs: false
+  record_audio: false        # 隐私优先；true 时整场 wav 仅存本机 records/
+  vad:
+    rms_abs_floor: 0.0045
+    min_speech_ms: 280
+    silence_hangover_ms: 450
+    pre_roll_ms: 350
+    max_segment_s: 12.0
+    adaptive: true
+
+asr:
+  model: small               # small=实时优先；large-v3-turbo=更慢的可选档位
+  compute_type: int8
+  cpu_threads: 12
+  without_timestamps: true
+  language: zh
+  beam_size: 3
+  vad_filter: true
+  initial_prompt: ""         # 避免 Whisper 续写提示词
+  use_hotwords: false
+  drop_low_confidence: false
+  retry_low_confidence: true
+  context_audio_s: 4.0
+  avg_logprob_threshold: -0.85
+  no_speech_threshold: 0.6
+  compression_ratio_threshold: 2.4
+  streaming_partial: false   # 边说边出字会增加 CPU 与终句延迟
+  partial_interval_s: 0.7
+  partial_model: base
+  partial_threads: 4
+  partial_vad_filter: false
+  partial_window_s: 5.0
+  hotwords: [VAE, GAN, diffusion, Transformer, baseline, ablation]
+
+vision:
+  capture: wemeet_window     # wemeet_window | primary | region
+  capture_method: auto       # auto | printwindow | crop
+  max_width: 1280
+  provider: openai
+  model: gpt-4o-mini
+  fallback_models: []
+  auto_interval_s: 0
+  ocr_fallback: true
+
+llm:
+  primary:
+    provider: openai
+    model: gpt-4o-mini
+    lane: deep
+    max_tokens: 900
+    temperature: 0.4
+  fast:
+    provider: deepseek
+    model: deepseek-chat
+    lane: fast
+    max_tokens: 700
+    temperature: 0.3
+  fallback: ["fast"]
+  thinking: middle           # 仅对支持 reasoning_effort 的提供商生效
+  free_qa_provider: openai   # 缺省跟随 primary
+  free_qa_model: gpt-4o-mini
+  request_timeout_s: 120
+  providers:
+    openai:
+      type: openai           # OpenAI 兼容协议；可换成其他兼容端点
+      base_url: https://api.openai.com/v1
+      api_key_env: OPENAI_API_KEY
+    deepseek:
+      type: openai
+      base_url: https://api.deepseek.com/v1
+      api_key_env: DEEPSEEK_API_KEY
+
+brain:
+  hint_every_s: 22
+  summary_every_s: 300
+  question_keywords: ["吗", "呢", "?", "？", "请问", "你怎么看", "你觉得", "是不是", "能不能", "为什么", "怎么办", "有没有", "汇报一下", "说说", "讲一下"]
+  question_merge_s: 2.0
+  max_context_chars: 3500
+  memory_mode: smart         # smart=相关时才检索 | off=关闭 | on=检索
+  memory_max_chars: 1800
+  free_qa_memory: smart
+  compress_after_chars: 12000
+
+ui:
+  layout: split
+  screen: secondary
+  split_fullscreen: false
+  split_topmost: false
+  split_size: [1280, 860]
+  split_anchor: top-left
+  split_margin: 18
+  split_scale: 1.0
+  fallback_width: 900
+  font_transcript: 16
+  font_answer: 14
+  font_script: 17
+  font_qa: 13
+  font_button: 11
+  alpha: 1.0
+  anchor: top-right
+  size: [452, 780]
+  font_family: "Microsoft YaHei UI"
+  font_size: 10
+  evade_on_share: false
+  capture_exclude: true
+  always_on_top: true
+
+hotkeys:
+  toggle_listen: f8
+  capture_slide: f9
+  summary: f10
+  toggle_visible: f7
+  im_asked: f6
+  freeze: f3
+  free_ask: f2
+  script: f5
+  click_through: f4
+  export_minutes: ctrl+f10
+  quit: ctrl+f12
+
+kb:
+  dir: data/kb
+  top_k: 2
+  max_chars: 1800
+  min_score: 1.5
+  materials: []              # 也可显式添加 {title, path, weight}
+
+paths:
+  pending_notes: ""
