@@ -19,6 +19,13 @@ VERSION = (ROOT / "packaging" / "version.txt").read_text(encoding="utf-8").strip
 ZIP = ROOT / "dist" / f"MeetingCopilot-v{VERSION}-Windows-x64.zip"
 CHECKSUM = ZIP.with_suffix(".zip.sha256")
 
+# GitHub Windows Runner 的控制台可能是 cp1252；中文日志不得掩盖真实构建结果。
+for stream in (sys.stdout, sys.stderr):
+    try:
+        stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError, OSError):
+        pass
+
 
 def run(command: list[str], *, cwd: Path = ROOT, timeout: int = 900,
         env: dict[str, str] | None = None) -> None:
