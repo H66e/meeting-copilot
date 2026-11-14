@@ -33,7 +33,10 @@ class TestPackaging(unittest.TestCase):
             result = subprocess.run([sys.executable, "-c", code], cwd=ROOT,
                                     capture_output=True, text=True, timeout=20)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout.strip(), f"{exe.parent}|{resources}")
+            project_dir, resource_dir = result.stdout.strip().split("|")
+            # Windows 可能返回 8.3 短路径；比较实际位置，而非字符串表示。
+            self.assertEqual(Path(project_dir).resolve(), exe.parent.resolve())
+            self.assertEqual(Path(resource_dir).resolve(), resources.resolve())
 
     def test_version_is_consistent(self):
         version = (ROOT / "packaging" / "version.txt").read_text(encoding="utf-8").strip()
