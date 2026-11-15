@@ -53,7 +53,7 @@ _NOISE_MAX = 0.03
 _NOISE_MIN = 1e-5
 # 起始需要连续多少个 100ms 帧超过阈值（抗孤立爆音）
 _ONSET_FRAMES = 2
-# 启动后先静默 0.5s 只学噪声底，避免“一开录就讲话”把噪声底学高
+# 启动后先缓存 0.5s 判断环境/持续讲话；若已开讲，保留缓存中的完整句首
 _VAD_WARMUP_S = 0.5
 
 
@@ -144,6 +144,8 @@ class EnergyVAD:
         self._silence_run = 0
         self._warm_left = self.warmup_frames
         self._warm_vals: list[float] = []
+        # 热身帧另存一份（至多 0.5s）：若开录即持续讲话，可恢复完整句首。
+        self._warm_buf: list[tuple[np.ndarray, float, float]] = []
         # 初始噪声底取“绝对底/起始倍数”，热身帧结束后用中位数替换
         self._noise: float = max(_NOISE_MIN, self.abs_floor / _NOISE_MULT_ON)
         self._last_on = self.abs_floor
@@ -191,14 +193,30 @@ class EnergyVAD:
         out: list[AudioChunk] = []
 
         if self._warm_left > 0:
-            # 启动/恢复后的热身帧：只学噪声底，不做切句（防止把开头环境音当语音）
+            # 热身仍只缓存、不立刻出句；若检测到持续讲话，则保留全部热身音频，
+            # 避免把开录后的前 0.5s（甚至整句）当作噪声丢掉。
             self._warm_left -= 1
             self._warm_vals.append(rms)
-            self._pre.append((arr, rms, float(t_start)))
+            entry = (arr, rms, float(t_start))
+            self._pre.append(entry)
+            self._warm_buf.append(entry)
             if self._warm_left == 0:
                 med = float(np.median(np.asarray(self._warm_vals, dtype=np.float64)))
-                self._noise = min(max(med, _NOISE_MIN), _NOISE_MAX)
+                startup_speech = med >= max(self.abs_floor * _NOISE_MULT_ON, _NOISE_MIN)
+                if startup_speech and self._warm_buf:
+                    # 热身中位能量已达到最低起始阈值的 3 倍，优先保住句首；
+                    # 不把这段语音学进噪声底，后续仍会在静音帧上正常自适应。
+                    self._noise = max(_NOISE_MIN, self.abs_floor / _NOISE_MULT_ON)
+                    _, warm_off = self.thresholds()
+                    self._in_speech = True
+                    self._buf = list(self._warm_buf)
+                    self._voiced_idx = [i for i, b in enumerate(self._buf) if b[1] >= warm_off]
+                    self._silence_run = len(self._buf) - 1 - self._voiced_idx[-1]
+                    self._pre.clear()
+                else:
+                    self._noise = min(max(med, _NOISE_MIN), _NOISE_MAX)
                 self._warm_vals.clear()
+                self._warm_buf.clear()
             return out
 
         if not self._in_speech:

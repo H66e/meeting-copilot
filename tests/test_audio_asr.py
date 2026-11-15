@@ -124,6 +124,16 @@ def test_vad_two_sentences():
     print(f"   切句: {[(round(c.t_start, 2), round(c.t_end, 2), round(c.duration, 2)) for c in chunks]}")
 
 
+def test_vad_cold_start_preserves_first_sentence():
+    """开始采集即讲话时，0.5s 热身不能把句首当噪声吃掉。"""
+    frames = _make_frames([(0.1, False), (3.8, True), (1.0, False)])
+    chunks = _vad_run(frames)
+    assert len(chunks) == 1, f"开录即讲话应保留完整一句，实际 {len(chunks)} 句"
+    assert chunks[0].t_start <= 0.1, f"句首被热身阶段截掉: {chunks[0].t_start:.2f}s"
+    assert chunks[0].t_end >= 3.8, f"句尾不完整: {chunks[0].t_end:.2f}s"
+    print(f"   冷启动: 首句 {chunks[0].t_start:.2f}–{chunks[0].t_end:.2f}s ✅")
+
+
 def test_vad_silence_only():
     frames = _make_frames([(5.0, False)])
     chunks = _vad_run(frames)
@@ -372,6 +382,7 @@ def main() -> int:
     cases = [
         ("电平/音量工具函数", test_level_helpers),
         ("VAD 合成音频切句（2 句）", test_vad_two_sentences),
+        ("VAD 冷启动保留首句", test_vad_cold_start_preserves_first_sentence),
         ("VAD 纯静音不出句", test_vad_silence_only),
         ("VAD 噪声底自适应", test_vad_noise_adapt),
         ("VAD max_segment 强切", test_vad_max_segment),
