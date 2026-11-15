@@ -1,4 +1,4 @@
-Meeting Copilot v0.2.0 · Windows 免安装预览版
+Meeting Copilot v0.2.1 · Windows 免安装预览版
 ===========================================
 
 面向研究组会与经允许的面试练习。请在取得参与者同意、遵守机构规定和面试规则的前提下使用。
@@ -13,7 +13,7 @@ Meeting Copilot v0.2.0 · Windows 免安装预览版
 
 二、启动
 --------
-1. 下载 MeetingCopilot-v0.2.0-Windows-x64.zip。
+1. 下载 MeetingCopilot-v0.2.1-Windows-x64.zip。
 2. 完整解压到你有写入权限的目录，例如“文档\MeetingCopilot”。
 3. 保持 MeetingCopilot.exe 与 _internal 文件夹在一起，不要只复制 exe，也不要直接在 ZIP 内运行。
 4. 双击 MeetingCopilot.exe。
@@ -42,7 +42,7 @@ Meeting Copilot v0.2.0 · Windows 免安装预览版
 ------------------
 发布页同时提供 .zip.sha256 文件。PowerShell 可运行：
 
-Get-FileHash .\MeetingCopilot-v0.2.0-Windows-x64.zip -Algorithm SHA256
+Get-FileHash .\MeetingCopilot-v0.2.1-Windows-x64.zip -Algorithm SHA256
 
 输出应与校验文件中的 SHA256 一致。
 
